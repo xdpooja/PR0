@@ -28,13 +28,13 @@ function getFallbackTranslation(text: string, sourceLang: string, targetLang: st
   
   // If translating from English to an Indic language, provide a mock response
   if (sourceLang === 'en' && targetLang in mockTranslations) {
-    // Return a formatted response that shows the translation is working
-    // but indicates it's a placeholder
-    return `${mockTranslations[targetLang]}\n\n${text}\n\n[Translation placeholder - Full IndicTrans2 service provides accurate translations]`;
+    // Return a cleaner message indicating translation service is not available
+    // Don't include the placeholder text that causes loops
+    return text; // Return original text - translation will be handled in UI
   }
   
-  // Otherwise return original text formatted nicely
-  return `${text}\n\n[Translation to ${targetLang} - IndicTrans2 service required for accurate results]`;
+  // Otherwise return original text
+  return text;
 }
 
 export async function POST(req: Request) {
@@ -82,13 +82,14 @@ export async function POST(req: Request) {
       }
     }
 
-    // Fallback: Use mock translation or return helpful message
+    // Fallback: Return original text (translation service not available)
     const fallbackText = getFallbackTranslation(text, sourceLang, targetLang);
     
     return NextResponse.json({ 
       translatedText: fallbackText,
       timeMs: 0,
-      note: 'Using fallback translation. For full IndicTrans2 support, configure TRANSLATION_SERVICE_URL with your Python service endpoint.'
+      isFallback: true,
+      note: 'Translation service is not available. The text is returned in the original language. For full IndicTrans2 support, configure TRANSLATION_SERVICE_URL with your Python service endpoint.'
     });
     
   } catch (error) {

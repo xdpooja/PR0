@@ -26,6 +26,13 @@ export const useTranslation = () => {
       }
 
       const data = await response.json();
+      
+      // If it's a fallback (service not available), return original text
+      // The UI will handle showing appropriate message
+      if (data.isFallback) {
+        return text; // Return original text when service unavailable
+      }
+      
       return data.translatedText;
     } catch (err) {
       console.error('Translation error:', err);

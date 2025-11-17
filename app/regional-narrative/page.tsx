@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Upload, FileText, Sparkles, Copy, Check, RefreshCw, Send, Mail, Users, Globe, Languages } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -14,6 +14,7 @@ export default function RegionalNarrative() {
   const [tonePreset, setTonePreset] = useState("formal");
   const [wordCount, setWordCount] = useState(250);
   const [generatedText, setGeneratedText] = useState("");
+  const [originalGeneratedText, setOriginalGeneratedText] = useState(""); // Store original English text
   const [copied, setCopied] = useState(false);
   const [autoSummarize, setAutoSummarize] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -22,6 +23,8 @@ export default function RegionalNarrative() {
   const [extractedEmails, setExtractedEmails] = useState<string[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translationProgress, setTranslationProgress] = useState(0);
+  const lastTranslatedLangRef = useRef<string>(""); // Track last translated language to prevent loops
+  const hasShownTranslationNoteRef = useRef<boolean>(false); // Track if we've shown the translation note
   
   // Initialize translation hook
   const { translate: translateText, isTranslating: isTranslationInProgress } = useTranslation();
@@ -47,7 +50,12 @@ export default function RegionalNarrative() {
   
   // Handle translation
   const handleTranslate = useCallback(async (text: string, targetLang: string) => {
-    if (!text || !targetLang) return text;
+    if (!text || !targetLang || targetLang === 'en') return text;
+    
+    // Check if this is placeholder text to avoid re-translating
+    if (text.includes('[Translation placeholder') || text.includes('[Note: Translation service')) {
+      return text;
+    }
     
     try {
       setIsTranslating(true);
@@ -58,26 +66,50 @@ export default function RegionalNarrative() {
       setTranslationProgress(100);
       setTimeout(() => setTranslationProgress(0), 500);
       
-      return translatedText || text; // Return original if translation fails
+      // If translation returned the same text, it means service is not available
+      if (translatedText === text || !translatedText) {
+        // Return text with a note that translation service is not available
+        const langName = supportedLanguages.find(l => l.code === targetLang)?.name || targetLang;
+        return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service is not available. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service.]`;
+      }
+      
+      return translatedText; // Return translated text
     } catch (error) {
       console.error('Translation error:', error);
-      return text; // Return original text on error
+      const langName = supportedLanguages.find(l => l.code === targetLang)?.name || targetLang;
+      return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service error. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service.]`;
     } finally {
       setIsTranslating(false);
     }
-  }, [translateText]);
+  }, [translateText, supportedLanguages]);
   
-  // Auto-translate generated text when language changes
+  // Auto-translate generated text when language changes (but not when generatedText changes)
   useEffect(() => {
-    if (generatedText && selectedLanguage && selectedLanguage !== 'en') {
+    // Only translate if:
+    // 1. We have original generated text
+    // 2. Language is selected and not English
+    // 3. Language has actually changed (not just generatedText)
+    // 4. We haven't already translated to this language
+    if (originalGeneratedText && selectedLanguage && selectedLanguage !== 'en' && lastTranslatedLangRef.current !== selectedLanguage) {
       const translateContent = async () => {
-        const translated = await handleTranslate(generatedText, selectedLanguage);
+        lastTranslatedLangRef.current = selectedLanguage;
+        hasShownTranslationNoteRef.current = false; // Reset note flag for new language
+        const translated = await handleTranslate(originalGeneratedText, selectedLanguage);
         setGeneratedText(translated);
+        // Check if translation added a note
+        if (translated.includes('[Note: Translation service')) {
+          hasShownTranslationNoteRef.current = true;
+        }
       };
       
       translateContent();
+    } else if (selectedLanguage === 'en' && originalGeneratedText) {
+      // If switching back to English, show original (without translation notes)
+      setGeneratedText(originalGeneratedText);
+      lastTranslatedLangRef.current = 'en';
+      hasShownTranslationNoteRef.current = false;
     }
-  }, [selectedLanguage, generatedText, handleTranslate]);
+  }, [selectedLanguage, originalGeneratedText, handleTranslate]);
 
   const regions = [
     { name: "North India", languages: ['hi', 'pa', 'ur', 'ne'] },
@@ -109,11 +141,32 @@ export default function RegionalNarrative() {
     { value: "analytical", label: "Policy-Driven/Analytical" },
   ];
 
-  const handleGenerate = () => {
-    // Simulate AI generation
-    setGeneratedText(
-      `मुंबई में नया फिनटेक क्रांति\n\nप्रमुख बिंदु:\n• क्षेत्रीय बाजार में महत्वपूर्ण प्रगति\n• स्थानीय उद्यमियों के लिए नए अवसर\n• डिजिटल भुगतान में वृद्धि\n\n[AI-generated culturally-nuanced narrative in ${selectedLanguage} for ${selectedMediaType} - ${wordCount} words]`
-    );
+  const handleGenerate = async () => {
+    // Generate English narrative first (this is what AI would generate)
+    const englishNarrative = `New Fintech Revolution in Mumbai\n\nKey Points:\n• Significant progress in regional markets\n• New opportunities for local entrepreneurs\n• Growth in digital payments\n• Enhanced financial inclusion across Tier 2 cities\n• Partnership opportunities with regional banks\n\n[AI-generated culturally-nuanced narrative for ${selectedMediaType} - ${wordCount} words]`;
+    
+    // Store original English text
+    setOriginalGeneratedText(englishNarrative);
+    lastTranslatedLangRef.current = ""; // Reset translation tracking
+    hasShownTranslationNoteRef.current = false; // Reset note flag
+    
+    // If a non-English language is selected, translate it
+    if (selectedLanguage && selectedLanguage !== 'en') {
+      setIsTranslating(true);
+      const translated = await handleTranslate(englishNarrative, selectedLanguage);
+      setGeneratedText(translated);
+      lastTranslatedLangRef.current = selectedLanguage;
+      if (translated.includes('[Note: Translation service')) {
+        hasShownTranslationNoteRef.current = true;
+      }
+      setIsTranslating(false);
+    } else {
+      // Otherwise, show English version
+      setGeneratedText(englishNarrative);
+      lastTranslatedLangRef.current = 'en';
+      hasShownTranslationNoteRef.current = false;
+    }
+    
     setStep(3);
   };
 
