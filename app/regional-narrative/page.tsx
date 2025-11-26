@@ -52,8 +52,10 @@ export default function RegionalNarrative() {
   const handleTranslate = useCallback(async (text: string, targetLang: string) => {
     if (!text || !targetLang || targetLang === 'en') return text;
     
-    // Check if this is placeholder text to avoid re-translating
-    if (text.includes('[Translation placeholder') || text.includes('[Note: Translation service')) {
+    // Check if this is placeholder text or error message to avoid re-translating
+    if (text.includes('[Translation placeholder') || 
+        text.includes('[Note: Translation service') ||
+        text.includes('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')) {
       return text;
     }
     
@@ -66,18 +68,24 @@ export default function RegionalNarrative() {
       setTranslationProgress(100);
       setTimeout(() => setTranslationProgress(0), 500);
       
-      // If translation returned the same text, it means service is not available
-      if (translatedText === text || !translatedText) {
-        // Return text with a note that translation service is not available
+      // Check if we got a valid translation (different from original and not an error message)
+      if (!translatedText || translatedText === text) {
+        // If translation is same as original, service likely not available
         const langName = supportedLanguages.find(l => l.code === targetLang)?.name || targetLang;
-        return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service is not available. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service.]`;
+        return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service is not available. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service or ensure cloud translation is enabled.]`;
       }
       
-      return translatedText; // Return translated text
+      // Check if it's already an error message (to avoid adding it twice)
+      if (translatedText.includes('[Note: Translation service')) {
+        return translatedText;
+      }
+      
+      // Valid translation received
+      return translatedText;
     } catch (error) {
       console.error('Translation error:', error);
       const langName = supportedLanguages.find(l => l.code === targetLang)?.name || targetLang;
-      return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service error. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service.]`;
+      return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service error. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service or check cloud translation API.]`;
     } finally {
       setIsTranslating(false);
     }
@@ -141,9 +149,144 @@ export default function RegionalNarrative() {
     { value: "analytical", label: "Policy-Driven/Analytical" },
   ];
 
+  // Generate narrative based on source text and parameters
+  const generateNarrative = (source: string, mediaType: string, tone: string, targetWords: number, region: string): string => {
+    if (!source || !source.trim()) {
+      return "Please provide source text to generate a narrative.";
+    }
+
+    // Extract key information from source text
+    const sourceLower = source.toLowerCase();
+    const words = source.split(/\s+/).filter(w => w.length > 0);
+    const sourceLength = words.length;
+    
+    // Determine content type from source
+    let contentTheme = "announcement";
+    if (sourceLower.includes("launch") || sourceLower.includes("release")) contentTheme = "product launch";
+    if (sourceLower.includes("partnership") || sourceLower.includes("collaboration")) contentTheme = "partnership";
+    if (sourceLower.includes("funding") || sourceLower.includes("investment")) contentTheme = "funding";
+    if (sourceLower.includes("award") || sourceLower.includes("recognition")) contentTheme = "achievement";
+    if (sourceLower.includes("crisis") || sourceLower.includes("issue")) contentTheme = "crisis management";
+    
+    // Extract key points (simple extraction - first few sentences or bullet points)
+    const sentences = source.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    const keyPoints = sentences.slice(0, Math.min(5, sentences.length));
+    
+    // Generate tone-appropriate opening
+    let opening = "";
+    if (tone === "urgent") {
+      opening = "BREAKING: ";
+    } else if (tone === "engaging") {
+      opening = "Exciting news from ";
+    } else if (tone === "analytical") {
+      opening = "Analysis: ";
+    }
+    
+    // Regional context based on selected region
+    const regionContext: Record<string, string> = {
+      "North India": "Northern markets",
+      "South India": "Southern regions",
+      "East India": "Eastern states",
+      "West India": "Western markets",
+      "North East India": "Northeastern states"
+    };
+    const regionName = regionContext[region] || "regional markets";
+    
+    // Media type specific formatting
+    let narrative = "";
+    if (mediaType === "Financial Daily") {
+      narrative = `${opening}${contentTheme.charAt(0).toUpperCase() + contentTheme.slice(1)} Impact on ${regionName}\n\n`;
+      narrative += `Key Highlights:\n`;
+      keyPoints.forEach((point, idx) => {
+        if (point.trim()) narrative += `• ${point.trim()}\n`;
+      });
+      narrative += `\nMarket Analysis:\n`;
+      narrative += `This development represents a significant shift in ${regionName.toLowerCase()}, with implications for local businesses and consumers. The strategic move aligns with broader economic trends and regional growth patterns.\n\n`;
+    } else if (mediaType === "Tech Blog") {
+      narrative = `${opening}Tech Innovation in ${regionName}\n\n`;
+      narrative += `What's New:\n`;
+      keyPoints.slice(0, 3).forEach((point, idx) => {
+        if (point.trim()) narrative += `• ${point.trim()}\n`;
+      });
+      narrative += `\nWhy It Matters:\n`;
+      narrative += `This innovation addresses key challenges in ${regionName.toLowerCase()} and opens new possibilities for tech adoption and digital transformation.\n\n`;
+    } else if (mediaType === "Consumer Magazine") {
+      narrative = `${opening}What This Means for You in ${regionName}\n\n`;
+      narrative += `Highlights:\n`;
+      keyPoints.slice(0, 4).forEach((point, idx) => {
+        if (point.trim()) narrative += `• ${point.trim()}\n`;
+      });
+      narrative += `\nConsumer Impact:\n`;
+      narrative += `Residents of ${regionName.toLowerCase()} can expect improved services and new opportunities as this initiative rolls out across the region.\n\n`;
+    } else if (mediaType === "Policy Journal") {
+      narrative = `${opening}Policy Implications for ${regionName}\n\n`;
+      narrative += `Key Points:\n`;
+      keyPoints.forEach((point, idx) => {
+        if (point.trim()) narrative += `• ${point.trim()}\n`;
+      });
+      narrative += `\nPolicy Analysis:\n`;
+      narrative += `This development requires careful consideration of regulatory frameworks and policy alignment to ensure sustainable growth in ${regionName.toLowerCase()}.\n\n`;
+    } else if (mediaType === "Lifestyle Publication") {
+      narrative = `${opening}Lifestyle Impact in ${regionName}\n\n`;
+      narrative += `What's Changing:\n`;
+      keyPoints.slice(0, 3).forEach((point, idx) => {
+        if (point.trim()) narrative += `• ${point.trim()}\n`;
+      });
+      narrative += `\nLifestyle Benefits:\n`;
+      narrative += `This brings exciting changes to daily life in ${regionName.toLowerCase()}, enhancing convenience and quality of life for residents.\n\n`;
+    } else {
+      // Default format
+      narrative = `${opening}${contentTheme.charAt(0).toUpperCase() + contentTheme.slice(1)} in ${regionName}\n\n`;
+      narrative += `Key Points:\n`;
+      keyPoints.forEach((point, idx) => {
+        if (point.trim()) narrative += `• ${point.trim()}\n`;
+      });
+      narrative += `\nRegional Context:\n`;
+      narrative += `This development has significant implications for ${regionName.toLowerCase()}, reflecting broader trends and opportunities in the region.\n\n`;
+    }
+    
+    // Add tone-specific closing
+    if (tone === "urgent") {
+      narrative += `Immediate action required. Stakeholders should prepare for rapid changes in the coming weeks.`;
+    } else if (tone === "engaging") {
+      narrative += `This is an exciting time for ${regionName.toLowerCase()}, with more developments expected soon.`;
+    } else if (tone === "analytical") {
+      narrative += `Further analysis is needed to fully understand the long-term implications for ${regionName.toLowerCase()}.`;
+    } else {
+      narrative += `This represents a significant milestone for ${regionName.toLowerCase()} and sets the stage for future growth.`;
+    }
+    
+    // Adjust length to match target word count (rough approximation)
+    const currentWords = narrative.split(/\s+/).length;
+    if (currentWords < targetWords * 0.7) {
+      // Add more content if too short
+      const additionalContent = `\n\nAdditional Context:\nThe regional implementation strategy focuses on local needs and cultural sensitivities. Community engagement and stakeholder consultation have been key priorities in ensuring successful adoption across ${regionName.toLowerCase()}.`;
+      narrative += additionalContent;
+    }
+    
+    // Truncate if too long (rough approximation)
+    const finalWords = narrative.split(/\s+/);
+    if (finalWords.length > targetWords * 1.2) {
+      narrative = finalWords.slice(0, Math.floor(targetWords * 1.1)).join(' ') + '...';
+    }
+    
+    return narrative.trim();
+  };
+
   const handleGenerate = async () => {
-    // Generate English narrative first (this is what AI would generate)
-    const englishNarrative = `New Fintech Revolution in Mumbai\n\nKey Points:\n• Significant progress in regional markets\n• New opportunities for local entrepreneurs\n• Growth in digital payments\n• Enhanced financial inclusion across Tier 2 cities\n• Partnership opportunities with regional banks\n\n[AI-generated culturally-nuanced narrative for ${selectedMediaType} - ${wordCount} words]`;
+    if (!sourceText || !sourceText.trim()) {
+      alert("Please enter source text first.");
+      return;
+    }
+    
+    // Generate English narrative based on actual source text and parameters
+    const englishNarrative = generateNarrative(
+      sourceText,
+      selectedMediaType,
+      tonePreset,
+      wordCount,
+      selectedRegion
+    );
     
     // Store original English text
     setOriginalGeneratedText(englishNarrative);

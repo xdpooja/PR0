@@ -27,13 +27,19 @@ export const useTranslation = () => {
 
       const data = await response.json();
       
-      // If it's a fallback (service not available), return original text
+      // If it's a final fallback (no service available), return original text
       // The UI will handle showing appropriate message
-      if (data.isFallback) {
-        return text; // Return original text when service unavailable
+      if (data.isFallback && data.source === 'none') {
+        return text; // Return original text when no service available
       }
       
-      return data.translatedText;
+      // Cloud translation or IndicTrans2 succeeded
+      if (data.translatedText) {
+        return data.translatedText;
+      }
+      
+      // Fallback to original text if no translation received
+      return text;
     } catch (err) {
       console.error('Translation error:', err);
       setError('Failed to translate text');

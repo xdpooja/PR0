@@ -3,6 +3,25 @@ import { NextResponse } from 'next/server';
 // IndicTrans2 Python service URL (for local development)
 const TRANSLATION_SERVICE_URL = process.env.TRANSLATION_SERVICE_URL || 'http://127.0.0.1:5000';
 
+// Language code mapping for translation APIs (ISO 639-1 to full language names)
+const LANGUAGE_NAMES: Record<string, string> = {
+  'hi': 'hindi',
+  'bn': 'bengali',
+  'ta': 'tamil',
+  'te': 'telugu',
+  'kn': 'kannada',
+  'ml': 'malayalam',
+  'mr': 'marathi',
+  'gu': 'gujarati',
+  'pa': 'punjabi',
+  'or': 'oriya',
+  'as': 'assamese',
+  'ur': 'urdu',
+  'ne': 'nepali',
+  'sa': 'sanskrit',
+  'mni': 'manipuri',
+};
+
 // Mock translation responses for when IndicTrans2 service is unavailable
 const mockTranslations: Record<string, string> = {
   'hi': 'हिंदी में अनुवादित पाठ',
@@ -22,18 +41,67 @@ const mockTranslations: Record<string, string> = {
   'mni': 'মনিপুরীত অনুবাদ কৰা পাঠ',
 };
 
+// Cloud translation fallback using MyMemory Translation API (free tier)
+async function translateWithCloudAPI(text: string, sourceLang: string, targetLang: string): Promise<string | null> {
+  try {
+    // MyMemory Translation API free tier (supports Indic languages)
+    // API uses ISO 639-1 codes directly (e.g., 'en|hi' for English to Hindi)
+    // For languages that might have issues, we map to full names
+    const langCodeMap: Record<string, string> = {
+      'or': 'or', // Odia
+      'mni': 'mni', // Manipuri might need special handling
+    };
+    
+    const sourceCode = sourceLang === 'en' ? 'en' : langCodeMap[sourceLang] || sourceLang;
+    const targetCode = langCodeMap[targetLang] || targetLang;
+    
+    // Limit text length to 500 characters for free tier
+    const textToTranslate = text.length > 500 ? text.substring(0, 500) : text;
+
+    const apiUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=${sourceCode}|${targetCode}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(8000), // 8 second timeout
+    });
+
+    if (!response.ok) {
+      console.error(`MyMemory API error: ${response.status} ${response.statusText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      let translated = data.responseData.translatedText;
+      
+      // If we truncated the text, note it
+      if (text.length > 500) {
+        translated += '\n\n[Note: Translation truncated to 500 characters due to free tier limits]';
+      }
+      
+      return translated;
+    }
+
+    if (data.responseStatus === 403) {
+      console.error('MyMemory API: Daily limit reached');
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Cloud translation API error:', error);
+    return null;
+  }
+}
+
 // Fallback translation function
 function getFallbackTranslation(text: string, sourceLang: string, targetLang: string): string {
   if (sourceLang === targetLang) return text;
   
-  // If translating from English to an Indic language, provide a mock response
-  if (sourceLang === 'en' && targetLang in mockTranslations) {
-    // Return a cleaner message indicating translation service is not available
-    // Don't include the placeholder text that causes loops
-    return text; // Return original text - translation will be handled in UI
-  }
-  
-  // Otherwise return original text
+  // Return original text - cloud translation will be handled in the main function
   return text;
 }
 
@@ -54,7 +122,7 @@ export async function POST(req: Request) {
                               !TRANSLATION_SERVICE_URL.includes('localhost');
 
     if (usePythonService) {
-      // Try to call the IndicTrans2 Python service
+      // Try to call the IndicTrans2 Python service first
       try {
         const response = await fetch(`${TRANSLATION_SERVICE_URL}/translate`, {
           method: 'POST',
@@ -74,22 +142,40 @@ export async function POST(req: Request) {
           const data = await response.json();
           return NextResponse.json({ 
             translatedText: data.translatedText,
-            timeMs: data.timeMs 
+            timeMs: data.timeMs,
+            source: 'indictrans2'
           });
         }
       } catch (fetchError) {
-        console.log('Python service unavailable, using fallback:', fetchError);
+        console.log('Python service unavailable, trying cloud API:', fetchError);
       }
     }
 
-    // Fallback: Return original text (translation service not available)
+    // Fallback: Try cloud translation API (MyMemory - free tier)
+    if (sourceLang === 'en' && targetLang in LANGUAGE_NAMES) {
+      const startTime = Date.now();
+      const cloudTranslation = await translateWithCloudAPI(text, sourceLang, targetLang);
+      
+      if (cloudTranslation && cloudTranslation !== text) {
+        const timeMs = Date.now() - startTime;
+        return NextResponse.json({ 
+          translatedText: cloudTranslation,
+          timeMs,
+          source: 'cloud',
+          note: 'Using cloud translation API (free tier). For best quality IndicTrans2 translations, configure TRANSLATION_SERVICE_URL with your Python service endpoint.'
+        });
+      }
+    }
+
+    // Final fallback: Return original text with message
     const fallbackText = getFallbackTranslation(text, sourceLang, targetLang);
     
     return NextResponse.json({ 
       translatedText: fallbackText,
       timeMs: 0,
       isFallback: true,
-      note: 'Translation service is not available. The text is returned in the original language. For full IndicTrans2 support, configure TRANSLATION_SERVICE_URL with your Python service endpoint.'
+      source: 'none',
+      note: 'Translation service is not available. The text is returned in the original language. For full translation support, configure TRANSLATION_SERVICE_URL with your Python service endpoint or enable cloud translation.'
     });
     
   } catch (error) {
