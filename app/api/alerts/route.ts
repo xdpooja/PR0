@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 
 const OBSEI_URL = process.env.OBSEI_SERVICE_URL || 'http://127.0.0.1:5001';
+const OBSEI_API_KEY = process.env.OBSEI_API_KEY;
 
 export async function GET() {
   try {
-    const res = await fetch(`${OBSEI_URL}/alerts`);
+    const res = await fetch(`${OBSEI_URL}/alerts`, {
+      headers: OBSEI_API_KEY ? { 'x-api-key': OBSEI_API_KEY } : undefined,
+    });
     if (!res.ok) {
       const text = await res.text();
       console.error('Obsei service returned error:', res.status, text);

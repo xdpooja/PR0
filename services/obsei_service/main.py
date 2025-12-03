@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import time
@@ -21,19 +21,33 @@ class MonitorConfig(BaseModel):
     interval_seconds: int = 60
 
 
+def _validate_api_key(req: Request):
+    """Validate x-api-key header when OBSEI_API_KEY env var is set."""
+    expected = os.environ.get("OBSEI_API_KEY")
+    if not expected:
+        return True
+    header = req.headers.get("x-api-key")
+    return header == expected
+
+
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
 
 @app.get("/alerts")
-def get_alerts(limit: int = 50):
+def get_alerts(request: Request, limit: int = 50):
+    # Require API key if configured
+    if not _validate_api_key(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     # Return most recent alerts
     return {"alerts": list(reversed(ALERTS))[:limit]}
 
 
 @app.post("/start-monitor")
-def start_monitor(cfg: MonitorConfig, background_tasks: BackgroundTasks):
+def start_monitor(request: Request, cfg: MonitorConfig, background_tasks: BackgroundTasks):
+    if not _validate_api_key(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     background_tasks.add_task(_run_monitor_loop, cfg.dict())
     return {"status": "monitor_started", "cfg": cfg}
 
