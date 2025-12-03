@@ -130,6 +130,25 @@ export default function CrisisPredictor() {
     }
   };
 
+  const handleClearAlerts = async () => {
+    if (!confirm('Are you sure you want to clear all alerts? This cannot be undone.')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/alerts', {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setAlerts([]);
+        alert('✅ All alerts cleared');
+      } else {
+        alert('❌ Failed to clear alerts');
+      }
+    } catch (err) {
+      alert('❌ Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
   const getRiskColor = (score: number) => {
     if (score >= 80) return { bg: "bg-red-600/10", border: "border-red-600", text: "text-red-500" };
     if (score >= 60) return { bg: "bg-orange-600/10", border: "border-orange-600", text: "text-orange-500" };
@@ -199,6 +218,15 @@ export default function CrisisPredictor() {
             <Settings className="w-4 h-4" />
             Configure Monitor
           </button>
+          {alerts.length > 0 && (
+            <button 
+              onClick={handleClearAlerts}
+              className="px-6 py-3 bg-red-600/80 text-white font-medium rounded-sm hover:bg-red-700 flex items-center gap-2"
+            >
+              <CloseIcon className="w-4 h-4" />
+              Clear Alerts
+            </button>
+          )}
         </div>
 
         {/* Global Risk Score */}

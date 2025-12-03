@@ -57,3 +57,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err?.message || 'Internal error' }, { status: 500 });
   }
 }
+
+export async function DELETE() {
+  try {
+    const res = await fetch(`${OBSEI_URL}/alerts`, {
+      method: 'DELETE',
+      headers: OBSEI_API_KEY ? { 'x-api-key': OBSEI_API_KEY } : undefined,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('Obsei clear alerts returned error:', res.status, text);
+      return NextResponse.json({ error: 'Failed to clear alerts' }, { status: 502 });
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (err: any) {
+    console.error('Failed to clear alerts:', err?.message || err);
+    return NextResponse.json({ error: err?.message || 'Internal error' }, { status: 500 });
+  }
+}

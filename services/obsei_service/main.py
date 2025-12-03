@@ -80,6 +80,20 @@ def get_alerts(request: Request, limit: int = 50):
     print(f"✓ [DEBUG] Returning {len(alerts_list)} alerts")
     return {"alerts": alerts_list}
 
+@app.delete("/alerts")
+def clear_alerts(request: Request):
+    global ALERTS, ALERT_ID
+    print(f"🗑️  [DEBUG] Clear alerts requested")
+    if not _validate_api_key(request):
+        print(f"✗ [DEBUG] Unauthorized access attempt")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    with LOCK:
+        count = len(ALERTS)
+        ALERTS = []
+        ALERT_ID = 0
+    print(f"✓ [DEBUG] Cleared {count} alerts, reset ID counter")
+    return {"status": "cleared", "alerts_cleared": count}
+
 @app.post("/start-monitor")
 def start_monitor(request: Request, cfg: MonitorConfig, background_tasks: BackgroundTasks):
     print(f"🚀 [DEBUG] Start monitor requested")
