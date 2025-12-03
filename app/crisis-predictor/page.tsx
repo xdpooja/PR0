@@ -25,8 +25,16 @@ export default function CrisisPredictor() {
   const [viewMode, setViewMode] = useState<"active" | "history">("active");
   const [showMonitorSettings, setShowMonitorSettings] = useState(false);
   const [monitorKeywords, setMonitorKeywords] = useState<string[]>(["product issue", "customer complaint", "service outage"]);
+  const [monitorClient, setMonitorClient] = useState("all");
   const [newKeyword, setNewKeyword] = useState("");
   const [isStartingMonitor, setIsStartingMonitor] = useState(false);
+
+  const clients = [
+    { value: "all", label: "All Clients" },
+    { value: "techcorp", label: "TechCorp India" },
+    { value: "financemax", label: "FinanceMax" },
+    { value: "retailhub", label: "RetailHub" },
+  ];
 
   const globalRiskScore = 67;
 
@@ -76,13 +84,18 @@ export default function CrisisPredictor() {
   const handleStartMonitor = async () => {
     setIsStartingMonitor(true);
     try {
+      const clientLabel = clients.find(c => c.value === monitorClient)?.label || monitorClient;
       const res = await fetch('/api/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: monitorKeywords, interval_seconds: 300 }),
+        body: JSON.stringify({ 
+          client: monitorClient,
+          keywords: monitorKeywords, 
+          interval_seconds: 300 
+        }),
       });
       if (res.ok) {
-        alert('✅ Monitor started with keywords: ' + monitorKeywords.join(', '));
+        alert('✅ Monitor started for ' + clientLabel + ' with keywords: ' + monitorKeywords.join(', '));
         setShowMonitorSettings(false);
       } else {
         alert('❌ Failed to start monitor');
@@ -494,6 +507,27 @@ export default function CrisisPredictor() {
                 >
                   <CloseIcon />
                 </button>
+              </div>
+
+              {/* Client Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Select Client
+                </label>
+                <p className="text-xs text-gray-500 mb-3 font-light">
+                  Choose which client to monitor for crisis alerts.
+                </p>
+                <select
+                  value={monitorClient}
+                  onChange={(e) => setMonitorClient(e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white font-light focus:border-blue-500 focus:outline-none"
+                >
+                  {clients.map((client) => (
+                    <option key={client.value} value={client.value}>
+                      {client.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mb-6">

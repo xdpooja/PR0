@@ -25,7 +25,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { keywords, interval_seconds } = body;
+    const { keywords, client, interval_seconds } = body;
 
     if (!Array.isArray(keywords) || keywords.length === 0) {
       return NextResponse.json({ error: 'Keywords array is required' }, { status: 400 });
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         keywords,
+        client: client || 'all',
         interval_seconds: interval_seconds || 300,
       }),
     });
