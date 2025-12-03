@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: obsei-crisis-detection
+    env: python
+    buildCommand: "pip install -r services/obsei_service/requirements-obsei.txt"
+    startCommand: "cd services/obsei_service && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10"
+      - key: OBSEI_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: PORT
+        value: "5001"
+      - key: HOST
+        value: "0.0.0.0"
