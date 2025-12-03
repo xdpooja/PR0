@@ -47,6 +47,11 @@ ALERTS: List[Dict[str, Any]] = []
 ALERT_ID = 0
 LOCK = threading.Lock()
 
+# Current monitoring session
+CURRENT_CLIENT = None
+CURRENT_KEYWORDS = []
+MONITOR_THREAD = None
+
 class MonitorConfig(BaseModel):
     keywords: List[str]
     client: str = "AutoMonitor"
@@ -96,14 +101,29 @@ def clear_alerts(request: Request):
 
 @app.post("/start-monitor")
 def start_monitor(request: Request, cfg: MonitorConfig, background_tasks: BackgroundTasks):
+    global CURRENT_CLIENT, CURRENT_KEYWORDS, ALERTS, ALERT_ID
+    
     print(f"🚀 [DEBUG] Start monitor requested")
     print(f"   Keywords: {cfg.keywords}")
     print(f"   Client: {cfg.client}")
     print(f"   Interval: {cfg.interval_seconds}s")
+    
     if not _validate_api_key(request):
         print(f"✗ [DEBUG] Unauthorized access attempt")
         raise HTTPException(status_code=401, detail="Unauthorized")
-    print(f"✓ [DEBUG] API key valid, starting background monitor...")
+    
+    print(f"✓ [DEBUG] API key valid, stopping old monitor and starting new one...")
+    
+    # Clear old alerts and reset for new client
+    with LOCK:
+        ALERTS = []
+        ALERT_ID = 0
+        CURRENT_CLIENT = cfg.client
+        CURRENT_KEYWORDS = cfg.keywords
+    
+    print(f"✓ [DEBUG] Alerts cleared, monitoring session reset for: {cfg.client}")
+    
+    # Start background monitoring for this specific client
     background_tasks.add_task(_run_monitor_loop, cfg.dict())
     result = {"status": "monitor_started", "cfg": cfg}
     print(f"✓ [DEBUG] Background task added, returning: {result}")
