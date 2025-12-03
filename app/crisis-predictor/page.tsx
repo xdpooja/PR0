@@ -31,7 +31,14 @@ export default function CrisisPredictor() {
   const [savedClients, setSavedClients] = useState<string[]>([]);
   const [newClient, setNewClient] = useState("");
 
-  const globalRiskScore = 67;
+  // Calculate global risk score from alerts
+  const calculateGlobalRiskScore = () => {
+    if (alerts.length === 0) return 0;
+    const avgScore = alerts.reduce((sum, alert) => sum + alert.riskScore, 0) / alerts.length;
+    return Math.round(avgScore);
+  };
+
+  const globalRiskScore = calculateGlobalRiskScore();
 
   // Live alerts state (polled from Obsei service via Next.js API)
   const [alerts, setAlerts] = useState<CrisisAlert[]>([]);
@@ -159,9 +166,11 @@ export default function CrisisPredictor() {
               className="px-6 py-3 bg-gray-900 border border-gray-700 rounded text-white font-light focus:border-white focus:outline-none"
             >
               <option value="all">All Clients</option>
-              <option value="techcorp">TechCorp India</option>
-              <option value="financemax">FinanceMax</option>
-              <option value="retailhub">RetailHub</option>
+              {savedClients.map((client) => (
+                <option key={client} value={client}>
+                  {client}
+                </option>
+              ))}
             </select>
 
             <div className="flex gap-2">
@@ -202,15 +211,28 @@ export default function CrisisPredictor() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-400 mb-2">Global Risk Score</h2>
-              <p className="text-sm text-gray-500 font-light">Aggregated across all monitored clients</p>
+              <p className="text-sm text-gray-500 font-light">
+                {monitorClient 
+                  ? `Aggregated across monitored clients` 
+                  : "Configure a monitor to start tracking risks"}
+              </p>
             </div>
             <div className="text-center">
-              <div className={`text-7xl font-light mb-2 ${getRiskColor(globalRiskScore).text}`}>
-                {globalRiskScore}
-              </div>
-              <div className={`px-4 py-1 rounded-sm text-sm font-medium ${getRiskColor(globalRiskScore).bg} ${getRiskColor(globalRiskScore).border} border`}>
-                {getRiskLabel(globalRiskScore)}
-              </div>
+              {alerts.length > 0 ? (
+                <>
+                  <div className={`text-7xl font-light mb-2 ${getRiskColor(globalRiskScore).text}`}>
+                    {globalRiskScore}
+                  </div>
+                  <div className={`px-4 py-1 rounded-sm text-sm font-medium ${getRiskColor(globalRiskScore).bg} ${getRiskColor(globalRiskScore).border} border`}>
+                    {getRiskLabel(globalRiskScore)}
+                  </div>
+                </>
+              ) : (
+                <div className="text-gray-400">
+                  <div className="text-5xl font-light mb-2">—</div>
+                  <p className="text-xs text-gray-500 font-light">No alerts yet</p>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
@@ -223,17 +245,12 @@ export default function CrisisPredictor() {
             transition={{ delay: 0.2 }}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-light">Local Spark Alerts ({alerts.length})</h2>
-              <div className="flex gap-2">
-                {["Product Flaw", "C-Suite", "Service Issue", "Competitor Attack"].map((filter) => (
-                  <button
-                    key={filter}
-                    className="px-4 py-2 bg-gray-800 rounded-sm text-sm font-light hover:bg-gray-700 transition-colors"
-                  >
-                    {filter}
-                  </button>
-                ))}
-              </div>
+              <h2 className="text-3xl font-light">
+                {monitorClient 
+                  ? `Alerts for ${monitorClient}` 
+                  : "Local Spark Alerts"
+                } ({alerts.length})
+              </h2>
             </div>
 
             <div className="grid gap-6">
@@ -341,22 +358,21 @@ export default function CrisisPredictor() {
             className="glass-effect p-8 rounded-lg"
           >
             <h2 className="text-3xl font-light mb-6">Past Crises & Resolutions</h2>
-            <div className="space-y-4">
-              {[
-                { client: "TechCorp", issue: "Product recall", resolved: "3 days", outcome: "Contained to regional media" },
-                { client: "FinanceMax", issue: "Data breach rumor", resolved: "1 day", outcome: "False alarm - proactive statement issued" },
-              ].map((item, i) => (
-                <div key={i} className="p-4 bg-green-600/10 border border-green-600 rounded">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium mb-1">{item.client} - {item.issue}</h3>
-                      <p className="text-sm text-gray-400 font-light">{item.outcome}</p>
-                    </div>
-                    <div className="text-sm text-gray-400">Resolved in {item.resolved}</div>
-                  </div>
+            {savedClients.length === 0 ? (
+              <div className="text-center py-12">
+                <AlertTriangle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-400 font-light">No crisis history yet. Start monitoring clients to track their crisis events and resolutions.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-400 font-light mb-4">
+                  Monitored clients: {savedClients.join(", ")}
+                </p>
+                <div className="text-center py-8 bg-gray-900/50 rounded-lg">
+                  <p className="text-gray-500 font-light">Crisis history data will appear here as incidents are monitored and resolved.</p>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </motion.div>
         )}
 
