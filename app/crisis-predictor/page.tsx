@@ -35,10 +35,15 @@ export default function CrisisPredictor() {
   const [alerts, setAlerts] = useState<CrisisAlert[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
-  // Calculate global risk score from alerts
+  // Filter alerts by selected client
+  const filteredAlerts = selectedClient === "all" 
+    ? alerts 
+    : alerts.filter(alert => alert.client === selectedClient);
+
+  // Calculate global risk score from filtered alerts
   const calculateGlobalRiskScore = () => {
-    if (alerts.length === 0) return 0;
-    const avgScore = alerts.reduce((sum, alert) => sum + alert.riskScore, 0) / alerts.length;
+    if (filteredAlerts.length === 0) return 0;
+    const avgScore = filteredAlerts.reduce((sum, alert) => sum + alert.riskScore, 0) / filteredAlerts.length;
     return Math.round(avgScore);
   };
 
@@ -224,7 +229,7 @@ export default function CrisisPredictor() {
               className="px-6 py-3 bg-red-600/80 text-white font-medium rounded-sm hover:bg-red-700 flex items-center gap-2"
             >
               <CloseIcon className="w-4 h-4" />
-              Clear Alerts
+              Clear All Alerts
             </button>
           )}
         </div>
@@ -240,13 +245,15 @@ export default function CrisisPredictor() {
             <div>
               <h2 className="text-2xl font-bold text-gray-400 mb-2">Global Risk Score</h2>
               <p className="text-sm text-gray-500 font-light">
-                {monitorClient 
+                {selectedClient !== "all"
+                  ? `Risk for ${selectedClient}` 
+                  : monitorClient 
                   ? `Aggregated across monitored clients` 
                   : "Configure a monitor to start tracking risks"}
               </p>
             </div>
             <div className="text-center">
-              {alerts.length > 0 ? (
+              {filteredAlerts.length > 0 ? (
                 <>
                   <div className={`text-7xl font-light mb-2 ${getRiskColor(globalRiskScore).text}`}>
                     {globalRiskScore}
@@ -274,21 +281,23 @@ export default function CrisisPredictor() {
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-3xl font-light">
-                {monitorClient 
-                  ? `Alerts for ${monitorClient}` 
+                {selectedClient !== "all"
+                  ? `Alerts for ${selectedClient}` 
                   : "Local Spark Alerts"
-                } ({alerts.length})
+                } ({filteredAlerts.length})
               </h2>
             </div>
 
             <div className="grid gap-6">
-              {alerts.length === 0 ? (
+              {filteredAlerts.length === 0 ? (
                 <div className="glass-effect p-12 rounded-lg text-center">
                   <AlertTriangle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                   <h3 className="text-xl font-light text-gray-400 mb-2">No Alerts Found</h3>
                   <p className="text-gray-500 font-light mb-4">
                     {monitorKeywords.length === 0 
                       ? "Configure keywords to start monitoring for threats."
+                      : selectedClient !== "all"
+                      ? `No alerts yet for ${selectedClient}. Monitoring active.`
                       : "Monitoring active. Alerts will appear here when threats are detected."}
                   </p>
                   {monitorKeywords.length === 0 && (
@@ -301,7 +310,7 @@ export default function CrisisPredictor() {
                   )}
                 </div>
               ) : (
-                alerts.map((alert, index) => {
+                filteredAlerts.map((alert, index) => {
                   const riskColors = getRiskColor(alert.riskScore);
                   return (
                     <motion.div
