@@ -4,6 +4,20 @@ from typing import List, Dict, Any
 import time
 import threading
 import logging
+from typing import Optional
+
+# Obsei sources
+try:
+    from obsei.source.google_news_source import GoogleNewsConfig, GoogleNewsSource
+except Exception:
+    GoogleNewsConfig = None
+    GoogleNewsSource = None
+
+# Local sentiment analyzer (vader)
+try:
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+except Exception:
+    SentimentIntensityAnalyzer = None
 
 app = FastAPI()
 logger = logging.getLogger("obsei_service")
@@ -61,33 +75,79 @@ def _run_monitor_loop(cfg: Dict):
     logger.info(f"Starting monitor for {keywords} every {interval}s")
     while True:
         try:
-            # TODO: Integrate with Obsei connectors and analyzers here.
-            # For now, this is a placeholder that simulates detecting negative sentiment posts.
-            sample_posts = [
-                {"text": f"Urgent issue about {keywords[0] if keywords else 'product'}", "source": "X", "created_at": time.time()},
-            ]
+            # Demo pipeline using Obsei GoogleNewsSource (no API key required) + Vader sentiment
+            if GoogleNewsSource is None or SentimentIntensityAnalyzer is None:
+                # If dependencies missing, fallback to simulated post
+                sample_posts = [
+                    {"text": f"Urgent issue about {keywords[0] if keywords else 'product'}", "source": "X", "created_at": time.time()},
+                ]
+                for p in sample_posts:
+                    sentiment = -0.6
+                    if sentiment < -0.5:
+                        global ALERT_ID
+                        with LOCK:
+                            ALERT_ID += 1
+                            alert = {
+                                "id": ALERT_ID,
+                                "client": "AutoMonitor",
+                                "riskScore": int(min(max(abs(sentiment) * 100, 0), 100)),
+                                "region": "Unknown",
+                                "language": "Unknown",
+                                "topic": "auto-detected",
+                                "triggerEvent": p.get("text"),
+                                "timeElapsed": "just now",
+                                "sentiment": sentiment,
+                                "keywords": keywords,
+                                "sources": [{"type": p.get("source"), "count": 1}],
+                            }
+                            ALERTS.append(alert)
+                            logger.info(f"New alert: {alert}")
+            else:
+                # Build GoogleNews config using keywords
+                query = ", ".join(keywords) if keywords else "breaking news"
+                src = GoogleNewsSource()
+                src_cfg = GoogleNewsConfig(query=query, max_results=10, fetch_article=True)
+                source_response_list = []
+                try:
+                    source_response_list = src.lookup(src_cfg)
+                except Exception as e:
+                    logger.exception("GoogleNews lookup failed")
 
-            for p in sample_posts:
-                sentiment = -0.6  # placeholder: you should use an analyzer to compute this
-                if sentiment < -0.5:
-                    global ALERT_ID
-                    with LOCK:
-                        ALERT_ID += 1
-                        alert = {
-                            "id": ALERT_ID,
-                            "client": "AutoMonitor",
-                            "riskScore": int(min(max(abs(sentiment) * 100, 0), 100)),
-                            "region": "Unknown",
-                            "language": "Unknown",
-                            "topic": "auto-detected",
-                            "triggerEvent": p.get("text"),
-                            "timeElapsed": "just now",
-                            "sentiment": sentiment,
-                            "keywords": keywords,
-                            "sources": [{"type": p.get("source"), "count": 1}],
-                        }
-                        ALERTS.append(alert)
-                        logger.info(f"New alert: {alert}")
+                # Use Vader for sentiment
+                analyzer = SentimentIntensityAnalyzer()
+
+                for sr in source_response_list:
+                    # SourceResponse has 'text' (or 'title') fields. Use best available.
+                    text = getattr(sr, 'text', None) or getattr(sr, 'title', None) or ''
+                    if not text:
+                        continue
+
+                    try:
+                        score = analyzer.polarity_scores(text)
+                        compound = score.get('compound', 0.0)
+                    except Exception:
+                        compound = 0.0
+
+                    # Negative sentiment threshold -> create alert
+                    if compound < -0.45:
+                        global ALERT_ID
+                        with LOCK:
+                            ALERT_ID += 1
+                            alert = {
+                                "id": ALERT_ID,
+                                "client": "AutoMonitor",
+                                "riskScore": int(min(max(abs(compound) * 100, 0), 100)),
+                                "region": getattr(sr, 'source', 'Unknown'),
+                                "language": getattr(sr, 'lang', 'Unknown'),
+                                "topic": getattr(sr, 'title', '')[:120],
+                                "triggerEvent": text[:1000],
+                                "timeElapsed": "just now",
+                                "sentiment": compound,
+                                "keywords": keywords,
+                                "sources": [{"type": getattr(sr, 'source', 'news'), "count": 1}],
+                            }
+                            ALERTS.append(alert)
+                            logger.info(f"New alert from GoogleNews: {alert['topic']}")
 
             time.sleep(interval)
         except Exception as e:
