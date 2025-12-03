@@ -33,7 +33,7 @@ export const useTranslation = () => {
         return text; // Return original text when no service available
       }
       
-      // Cloud translation or IndicTrans2 succeeded
+      // Google Translate or fallback succeeded
       if (data.translatedText) {
         return data.translatedText;
       }

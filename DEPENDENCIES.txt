@@ -46,14 +46,15 @@ Build/Platform:
 Serverless API (Next.js API Route)
 ============================================================
 - Uses Next.js built-in serverless functions
-- Fallback translation (mock) included for production (when Python service not available)
-- Optional env variable:
-  - TRANSLATION_SERVICE_URL (URL to Python translation service; not required on Vercel due to mock fallback)
+- Calls Google Cloud Translation v2 via HTTPS
+- Fallback: MyMemory free tier (English → Indic) when Google is unavailable
+- Required env variable:
+  - GOOGLE_TRANSLATE_API_KEY (Google Cloud API key with Translation scope)
 
 ============================================================
-Python Translation Service (IndicTrans2 via Hugging Face)
+Legacy Python Translation Service (IndicTrans2 via Hugging Face)
 ============================================================
-Purpose: Local/hosted service to perform real Indic translations using HF model ai4bharat/indictrans2-en-indic-1B.
+Purpose: Historical local/hosted service to perform Indic translations with the HF model `ai4bharat/indictrans2-en-indic-1B`. No longer required for standard deployments.
 
 Python Packages (see chorus-bot/requirements.txt):
 Core ML Stack
@@ -88,21 +89,22 @@ Notes:
 - Model: ai4bharat/indictrans2-en-indic-1B (downloaded automatically via HF hub on first use)
 - trust_remote_code=True is used to enable src_lang/tgt_lang kwargs for the pipeline
 - GPU acceleration is optional but recommended for large workloads
+- Treat this stack as optional/legacy; Google Cloud Translation is the primary path
 
 ============================================================
 Scripts / Operational
 ============================================================
-- scripts/install_indic_trans2.sh (sets up Python venv and dependencies)
-- start_translation_service.sh (starts Flask HTTP service)
+- scripts/install_indic_trans2.sh (legacy: sets up Python venv and dependencies)
+- start_translation_service.sh (legacy: starts Flask HTTP service)
 
 ============================================================
 Environment Variables
 ============================================================
 Frontend / API Route
-- TRANSLATION_SERVICE_URL: URL for the Python translation service (optional in production; fallback is used if unavailable)
+- GOOGLE_TRANSLATE_API_KEY: Google Cloud Translation API key (required for production-quality translations)
 
-Python Service
-- None required by default. Configure CUDA environment if using GPU.
+Legacy Python Service
+- TRANSLATION_SERVICE_URL: URL for the IndicTrans2 service (unused unless you explicitly host it)
 
 ============================================================
 Optional / Future Integrations

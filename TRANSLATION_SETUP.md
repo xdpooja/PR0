@@ -1,157 +1,83 @@
-# IndicTrans2 Translation Setup
+# Google Translation Setup
 
-This guide will help you set up IndicTrans2 translation backend for the Regional Narrative Engine.
+This guide explains how to enable high-quality Indic translations in the Regional Narrative Engine using **Google Cloud Translation** (v2 API).
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- Git
-- 10GB+ free disk space (for models)
-- CUDA-capable GPU (optional, for faster inference)
+- Google Cloud project with billing enabled
+- Cloud Translation API turned on
+- API key (or service account) with access to the Translation API
+- `.env.local` file in the project root
 
-## Installation Steps
+## 1. Enable the API and create a key
 
-### 1. Install IndicTrans2 and Dependencies
+1. Visit the [Google Cloud Console](https://console.cloud.google.com/) and select your project.
+2. Navigate to **APIs & Services → Library** and enable **Cloud Translation API**.
+3. Go to **APIs & Services → Credentials** and create an **API key** (or reuse an existing one with Translation access).
 
-Run the installation script:
+## 2. Configure environment variables
 
-```bash
-cd chorus-bot
-chmod +x scripts/install_indic_trans2.sh
-./scripts/install_indic_trans2.sh
-```
-
-This script will:
-- Create a Python virtual environment
-- Install all required dependencies
-- Clone the IndicTrans2 repository from GitHub
-- Download pre-trained translation models
-
-### 2. Start the Translation Service
-
-Start the translation HTTP service:
-
-```bash
-./start_translation_service.sh
-```
-
-Or manually:
-
-```bash
-source venv/bin/activate
-python services/translation_service.py --http --host 127.0.0.1 --port 5000
-```
-
-The service will be available at `http://127.0.0.1:5000`
-
-### 3. Configure Environment Variables (Optional)
-
-If you need to change the service URL, add to your `.env.local`:
+Create (or update) `.env.local` in the project root:
 
 ```env
-TRANSLATION_SERVICE_URL=http://127.0.0.1:5000
+GOOGLE_TRANSLATE_API_KEY=your_api_key_here
 ```
 
-## API Endpoints
+Restart `npm run dev` (or redeploy to Vercel) so Next.js can read the variable at build time.
 
-### Health Check
-```
-GET http://127.0.0.1:5000/health
-```
+### Vercel deployment
 
-### Translate
-```
-POST http://127.0.0.1:5000/translate
-Content-Type: application/json
+1. Open your Vercel project.
+2. Go to **Settings → Environment Variables**.
+3. Add the same `GOOGLE_TRANSLATE_API_KEY` for the desired environments (Preview/Production).
+4. Redeploy.
 
-{
-  "text": "Hello, how are you?",
-  "sourceLang": "en",
-  "targetLang": "hi"
-}
-```
+## 3. How translation works now
 
-Response:
-```json
-{
-  "translatedText": "नमस्ते, आप कैसे हैं?",
-  "sourceLang": "en",
-  "targetLang": "hi",
-  "timeMs": 123.45
-}
-```
+- `app/api/translate/route.ts` calls Google Cloud Translation first.
+- If Google rejects the request (quota exceeded, unsupported pair, etc.), the route falls back to the free-tier **MyMemory** API for **English → Indic** translations (≈500-character limit).
+- If both providers fail, the original English text is returned along with a note so the UI can inform the user.
 
-## Supported Languages
+## Supported languages
 
-The following languages are supported and aligned between frontend and backend:
+The UI allows translating English narratives into the following languages as long as Google supports them:
 
-- **English** (en)
-- **Hindi** (hi)
-- **Bengali** (bn)
-- **Tamil** (ta)
-- **Telugu** (te)
-- **Kannada** (kn)
-- **Malayalam** (ml)
-- **Marathi** (mr)
-- **Gujarati** (gu)
-- **Punjabi** (pa)
-- **Odia** (or)
-- **Assamese** (as)
-- **Urdu** (ur)
-- **Nepali** (ne)
-- **Sanskrit** (sa)
-- **Manipuri** (mni)
+- Hindi (`hi`)
+- Bengali (`bn`)
+- Tamil (`ta`)
+- Telugu (`te`)
+- Kannada (`kn`)
+- Malayalam (`ml`)
+- Marathi (`mr`)
+- Gujarati (`gu`)
+- Punjabi (`pa`)
+- Odia (`or`)
+- Assamese (`as`)
+- Urdu (`ur`)
+- Nepali (`ne`)
+- Sanskrit (`sa`)
+- Sindhi (`sd`)
+- Kashmiri (`ks`)
+- Tibetan (`bo`)
+- Meitei/Manipuri (`mni`)
+- Dogri (`doi`)
+- Santali (`sat`)
+- Bodo (`brx`)
+- Konkani (`kok`/`gom`)
+- Maithili (`mai`)
 
-Additional languages supported by IndicTrans2 backend (available for future use):
-- Kashmiri (ks)
-- Dogri (doi)
-- Konkani (kok)
-- Maithili (mai)
-- Bodo (brx)
-- Santali (sat)
+Google recently added many of these Indic languages; if a specific code is still unsupported, the fallback path will kick in automatically.
 
-## Integration with Next.js
+## Legacy IndicTrans2 service (optional)
 
-The Next.js API route (`app/api/translate/route.ts`) connects to the local Python service for real translations.
-
-Local development:
-1. Start the Python service: `python services/translation_service.py --http`
-2. Dev server: `npm run dev`
-
-Production (Vercel):
-- The API route includes a fallback translation (placeholder text) when the Python service is not reachable.
-- For full fidelity translations in production, host the Python service and set `TRANSLATION_SERVICE_URL` in Vercel Project → Settings → Environment Variables.
+The repository still includes the previous HuggingFace/IndicTrans2 Python service (`services/translation_service.py`) and helper scripts. You can continue to run it if you need fully offline translations, but it is no longer required for default deployments.
 
 ## Troubleshooting
 
-### Service not responding
-- Check if the service is running: `curl http://127.0.0.1:5000/health`
-- Check logs in `translation_service.log`
+- **Missing translations**: Ensure `GOOGLE_TRANSLATE_API_KEY` is set in the runtime environment and the API is enabled.
+- **Quota / billing errors**: Check Google Cloud console for quota usage and billing status.
+- **Unsupported language**: Confirm Google supports the ISO code you are requesting; otherwise expect the MyMemory fallback (English-only).
+- **Large payloads**: Google API calls are truncated to 4,500 characters to avoid exceeding the 5,000-character limit. MyMemory fallback is limited to ~500 characters.
 
-### Model loading fails
-- Ensure you've logged in to Hugging Face: `huggingface-cli login` (or set `HUGGING_FACE_HUB_TOKEN`)
-- Check disk space availability
-- First run may take time to download weights
-
-### Slow translations
-- Use GPU if available (CUDA)
-- Reduce batch size in `TranslationConfig`
-- Check system resources
-
-## Production Deployment
-
-For production, use a process manager like `systemd` or `supervisor`:
-
-```bash
-# Install gunicorn
-pip install gunicorn
-
-# Run with gunicorn
-gunicorn -w 2 -b 127.0.0.1:5000 "services.translation_service:app"
-```
-
-## References
-
-- [ai4bharat/indictrans2-en-indic-1B](https://huggingface.co/ai4bharat/indictrans2-en-indic-1B)
-- [Transformers pipeline docs](https://huggingface.co/docs/transformers/main_classes/pipelines)
+With these steps completed, every environment (local, preview, production) will automatically use Google Cloud Translation without any additional Python services.
 

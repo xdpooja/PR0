@@ -33,14 +33,14 @@ PR0/
 │   └── useTranslation.ts         # Translation hook for API calls
 │
 ├── lib/                          # Utility libraries and helpers
-│   ├── indic-translator.ts       # IndicTrans2 translator class (mock)
+│   ├── indic-translator.ts       # Legacy IndicTrans2 translator stub (unused)
 │   └── utils.ts                  # Utility functions (formatting, etc.)
 │
 ├── services/                     # External service integrations
-│   └── translation_service.py    # Python translation service (IndicTrans2)
+│   └── translation_service.py    # Legacy IndicTrans2 Python service
 │
 ├── scripts/                      # Setup and installation scripts
-│   └── install_indic_trans2.sh  # IndicTrans2 installation script
+│   └── install_indic_trans2.sh  # Legacy IndicTrans2 installation script
 │
 ├── public/                       # Static assets
 │   └── robots.txt                # SEO robots file
@@ -190,15 +190,15 @@ PR0/
 - **Key Features**:
   - POST endpoint for translation requests
   - GET endpoint for health checks
-  - Connects to Python IndicTrans2 service (optional)
-  - Fallback mock translations when service unavailable
+  - Calls Google Cloud Translation v2 using `GOOGLE_TRANSLATE_API_KEY`
+  - Falls back to the MyMemory free tier (English → Indic) when Google is unavailable
 - **Connections**:
   - Called by: `hooks/useTranslation.ts`
-  - Connects to: `services/translation_service.py` (Python service)
-  - Environment: Uses `TRANSLATION_SERVICE_URL` env variable
+  - Environment: Requires `GOOGLE_TRANSLATE_API_KEY`
+  - Optional legacy: can be extended to call the IndicTrans2 Python service, but this is no longer default
 - **Data Flow**:
   ```
-  Frontend → useTranslation Hook → /api/translate → Python Service (or fallback)
+  Frontend → useTranslation Hook → /api/translate → Google Cloud Translation (→ MyMemory fallback)
   ```
 
 ---
@@ -235,30 +235,22 @@ PR0/
   - Used by: Multiple feature pages for data formatting
   - Dependencies: `clsx`, `tailwind-merge`
 
-#### **`lib/indic-translator.ts`** - IndicTrans2 Translator Class
-- **Purpose**: TypeScript class wrapper for IndicTrans2 translation (currently mock)
-- **Key Features**:
-  - Model initialization
-  - Single and batch translation methods
-  - Placeholder implementation (ready for real integration)
-- **Connections**:
-  - Future: Will be used by API routes for server-side translation
-  - Note: Currently not actively used (API route uses Python service directly)
+#### **`lib/indic-translator.ts`** - Legacy Translator Stub
+- **Purpose**: Previously wrapped the IndicTrans2 model; now kept for reference
+- **Key Notes**:
+  - Contains placeholder initialization/translate methods
+  - Not imported anywhere in the current Google-based flow
+  - Safe to remove once the legacy pipeline is retired
 
 ---
 
 ### 🐍 **Python Services**
 
-#### **`services/translation_service.py`** - Translation Service
-- **Purpose**: Python Flask/FastAPI service for IndicTrans2 translations
-- **Key Features**:
-  - HTTP API endpoint for translations
-  - IndicTrans2 model integration
-  - Health check endpoint
-- **Connections**:
-  - Called by: `app/api/translate/route.ts` (Next.js API route)
-  - Environment: Runs on `http://127.0.0.1:5000` (configurable)
-- **Setup**: See `TRANSLATION_SETUP.md`
+#### **`services/translation_service.py`** - Legacy IndicTrans2 Service
+- **Purpose**: Original Flask service hosting HuggingFace IndicTrans2 models
+- **Status**: Optional / deprecated in favor of Google Cloud Translation
+- **When to use**: Only if you need an offline/self-hosted translation stack
+- **Setup**: Refer to historical instructions in `scripts/install_indic_trans2.sh`
 
 ---
 
@@ -321,14 +313,9 @@ PR0/
 
 ### 📜 **Scripts**
 
-#### **`scripts/install_indic_trans2.sh`** - Installation Script
-- **Purpose**: Automated setup script for IndicTrans2 Python service
-- **Key Features**:
-  - Creates Python virtual environment
-  - Installs dependencies from `requirements.txt`
-  - Clones IndicTrans2 repository
-  - Downloads pre-trained models
-- **Usage**: Run before starting translation service
+#### **`scripts/install_indic_trans2.sh`** - Legacy Installation Script
+- **Purpose**: Bootstraps the IndicTrans2 Python stack (no longer required for Google Cloud Translation)
+- **Usage**: Only needed if you revive the legacy service
 
 ---
 
@@ -347,8 +334,8 @@ PR0/
 - **Contents**: Vercel deployment, environment variables, troubleshooting
 
 #### **`TRANSLATION_SETUP.md`** - Translation Setup Guide
-- **Purpose**: Instructions for setting up IndicTrans2 translation service
-- **Contents**: Installation, API endpoints, supported languages, troubleshooting
+- **Purpose**: Explains how to configure Google Cloud Translation (and mentions the legacy IndicTrans2 option)
+- **Contents**: API key creation, environment variables, supported languages, fallback behavior
 
 ---
 
@@ -364,8 +351,7 @@ app/layout.tsx
 
 app/regional-narrative/page.tsx
   ├── hooks/useTranslation.ts (imported)
-  │   └── app/api/translate/route.ts (calls)
-  │       └── services/translation_service.py (optional)
+  │   └── app/api/translate/route.ts (calls Google + fallback)
   └── lib/utils.ts (imported for formatting)
 
 app/conversion-attribution/page.tsx

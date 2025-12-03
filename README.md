@@ -77,6 +77,16 @@ npm run dev
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
+### Translation Configuration (Optional but Recommended)
+
+For production-quality Indic translations, add a Google Cloud Translation API key to `.env.local`:
+
+```env
+GOOGLE_TRANSLATE_API_KEY=your_api_key_here
+```
+
+See `TRANSLATION_SETUP.md` for detailed instructions and supported languages.
+
 ### Build for Production
 
 ```bash

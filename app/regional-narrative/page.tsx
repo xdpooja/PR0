@@ -29,7 +29,7 @@ export default function RegionalNarrative() {
   // Initialize translation hook
   const { translate: translateText, isTranslating: isTranslationInProgress } = useTranslation();
   
-  // Available languages for translation (aligned with IndicTrans2 backend support)
+  // Available languages for translation (aligned with Google Translate setup)
   const supportedLanguages = [
     { code: 'hi', name: 'Hindi' },
     { code: 'bn', name: 'Bengali' },
@@ -72,7 +72,7 @@ export default function RegionalNarrative() {
       if (!translatedText || translatedText === text) {
         // If translation is same as original, service likely not available
         const langName = supportedLanguages.find(l => l.code === targetLang)?.name || targetLang;
-        return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service is not available. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service or ensure cloud translation is enabled.]`;
+        return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service is not available. The narrative above is in English. Verify the Google Translate API key or fallback configuration for full ${langName} support.]`;
       }
       
       // Check if it's already an error message (to avoid adding it twice)
@@ -85,7 +85,7 @@ export default function RegionalNarrative() {
     } catch (error) {
       console.error('Translation error:', error);
       const langName = supportedLanguages.find(l => l.code === targetLang)?.name || targetLang;
-      return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service error. The narrative above is in English. For full ${langName} translation support, configure the IndicTrans2 service or check cloud translation API.]`;
+      return `${text}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n[Note: Translation service error. The narrative above is in English. Verify the Google Translate API key or fallback configuration for full ${langName} support.]`;
     } finally {
       setIsTranslating(false);
     }

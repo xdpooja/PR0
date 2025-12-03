@@ -33,26 +33,18 @@ Once the server is running, open your browser and go to:
 - **Relationship Agent**: http://localhost:3000/relationship-agent
 - **Crisis Predictor**: http://localhost:3000/crisis-predictor
 
-## 🔧 Optional: Python Translation Service
+## 🔧 Optional: Google Translate API (Recommended)
 
-The app works without the Python service (uses fallback translations). For real IndicTrans2 translations:
+The app ships with Google Cloud Translation support for high-quality Indic language output. To enable it:
 
-1. **Install Python dependencies** (if not already done):
-   ```bash
-   pip install -r requirements.txt
+1. **Create a Google Cloud API key** with the Cloud Translation API enabled.
+2. **Add the key to `.env.local`:**
+   ```env
+   GOOGLE_TRANSLATE_API_KEY=your_api_key_here
    ```
+3. **Restart** `npm run dev` so the server picks up the new environment variable.
 
-2. **Start the translation service**:
-   ```bash
-   python services/translation_service.py --http --host 127.0.0.1 --port 5000
-   ```
-
-   Or use the provided script:
-   ```bash
-   ./start_translation_service.sh
-   ```
-
-3. The translation service will run on `http://127.0.0.1:5000`
+When the key is missing or the quota is exceeded, the app falls back to the free MyMemory API (limited to ~500 characters per request).
 
 ## 🛑 Stopping the Server
 
