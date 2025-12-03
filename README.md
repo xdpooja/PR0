@@ -87,6 +87,18 @@ GOOGLE_TRANSLATE_API_KEY=your_api_key_here
 
 See `TRANSLATION_SETUP.md` for detailed instructions and supported languages.
 
+### Crisis Predictor with Obsei (Production Ready)
+
+The Crisis Predictor now includes live, AI-powered crisis detection using Obsei. Deploy it to Vercel + Render for end-to-end monitoring:
+
+1. Deploy Obsei service to Render (see `OBSEI_DEPLOYMENT.md`)
+2. Set environment variables in Vercel:
+   - `OBSEI_SERVICE_URL`: Your Render service URL
+   - `OBSEI_API_KEY`: Secure API key
+3. The Crisis Predictor will automatically poll and display real-time alerts
+
+For detailed deployment steps, see `OBSEI_DEPLOYMENT.md`.
+
 ### Build for Production
 
 ```bash
@@ -96,14 +108,24 @@ npm start
 
 ## Deployment
 
+### Vercel (Frontend)
+
 This application is optimized for **Vercel deployment**:
 
 1. Push your code to GitHub
 2. Import the repository in Vercel
-3. Configure environment variables
+3. Configure environment variables (see `OBSEI_DEPLOYMENT.md`)
 4. Deploy
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+
+### Render (Obsei Backend - Optional)
+
+For live crisis detection, deploy the Obsei service to Render (free tier available):
+
+1. Follow steps in `OBSEI_DEPLOYMENT.md`
+2. Configure `OBSEI_SERVICE_URL` and `OBSEI_API_KEY` in Vercel environment
+3. Crisis Predictor will auto-connect to live data
 
 ## Design Philosophy
 
