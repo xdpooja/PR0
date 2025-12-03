@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import feedparser
+from urllib.parse import quote
 
 # Sentiment analyzer
 try:
@@ -114,7 +115,9 @@ def _run_monitor_loop(cfg: Dict):
         print(f"\n📡 [CYCLE {cycle}] Starting monitoring cycle...")
         try:
             # Fetch news from Google News RSS (no auth required)
-            query = "+".join(keywords) if keywords else "breaking+news"
+            # Properly URL-encode keywords
+            keywords_str = " ".join(keywords) if keywords else "breaking news"
+            query = quote(keywords_str)
             rss_url = f"https://news.google.com/rss/search?q={query}"
             
             print(f"   📰 Fetching RSS: {rss_url}")
