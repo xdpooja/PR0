@@ -31,6 +31,10 @@ export default function CrisisPredictor() {
   const [savedClients, setSavedClients] = useState<string[]>([]);
   const [newClient, setNewClient] = useState("");
 
+  // Live alerts state (polled from Obsei service via Next.js API)
+  const [alerts, setAlerts] = useState<CrisisAlert[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+
   // Calculate global risk score from alerts
   const calculateGlobalRiskScore = () => {
     if (alerts.length === 0) return 0;
@@ -39,10 +43,6 @@ export default function CrisisPredictor() {
   };
 
   const globalRiskScore = calculateGlobalRiskScore();
-
-  // Live alerts state (polled from Obsei service via Next.js API)
-  const [alerts, setAlerts] = useState<CrisisAlert[]>([]);
-  const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   useEffect(() => {
     let mounted = true;
