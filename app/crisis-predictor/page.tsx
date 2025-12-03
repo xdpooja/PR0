@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, TrendingDown, MapPin, Clock, Twitter, MessageSquare, Shield, FileText, Send } from "lucide-react";
+import { AlertTriangle, TrendingDown, MapPin, Clock, Twitter, MessageSquare, Shield, FileText, Send, Settings, Plus, X as CloseIcon } from "lucide-react";
 
 interface CrisisAlert {
   id: number;
@@ -23,63 +23,15 @@ export default function CrisisPredictor() {
   const [selectedAlert, setSelectedAlert] = useState<CrisisAlert | null>(null);
   const [showAlertDetail, setShowAlertDetail] = useState(false);
   const [viewMode, setViewMode] = useState<"active" | "history">("active");
+  const [showMonitorSettings, setShowMonitorSettings] = useState(false);
+  const [monitorKeywords, setMonitorKeywords] = useState<string[]>(["product issue", "customer complaint", "service outage"]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [isStartingMonitor, setIsStartingMonitor] = useState(false);
 
   const globalRiskScore = 67;
 
-  const staticAlerts: CrisisAlert[] = [
-    {
-      id: 1,
-      client: "TechCorp India",
-      riskScore: 88,
-      region: "Mumbai",
-      language: "Marathi",
-      topic: "Product Flaw",
-      triggerEvent: "7 posts in last 45 minutes on X & 2 regional blogs",
-      timeElapsed: "45 min ago",
-      sentiment: -0.72,
-      keywords: ["faulty design", "refund scam", "customer service"],
-      sources: [
-        { type: "X/Twitter", count: 7 },
-        { type: "Regional Blogs", count: 2 },
-        { type: "WhatsApp Groups", count: 3 },
-      ],
-    },
-    {
-      id: 2,
-      client: "FinanceMax",
-      riskScore: 76,
-      region: "Delhi",
-      language: "Hindi",
-      topic: "Service Issue",
-      triggerEvent: "Negative trending hashtag on regional X",
-      timeElapsed: "2 hours ago",
-      sentiment: -0.58,
-      keywords: ["delayed payment", "poor support", "नहीं चलेगा"],
-      sources: [
-        { type: "X/Twitter", count: 12 },
-        { type: "Local News", count: 1 },
-      ],
-    },
-    {
-      id: 3,
-      client: "RetailHub",
-      riskScore: 64,
-      region: "Bangalore",
-      language: "Kannada",
-      topic: "Competitor Attack",
-      triggerEvent: "Competitor PR campaign gaining traction",
-      timeElapsed: "4 hours ago",
-      sentiment: -0.45,
-      keywords: ["comparison", "better alternative", "switching"],
-      sources: [
-        { type: "Social Media", count: 8 },
-        { type: "Tech Blogs", count: 2 },
-      ],
-    },
-  ];
-
   // Live alerts state (polled from Obsei service via Next.js API)
-  const [alerts, setAlerts] = useState<CrisisAlert[]>(staticAlerts);
+  const [alerts, setAlerts] = useState<CrisisAlert[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   useEffect(() => {
@@ -91,18 +43,17 @@ export default function CrisisPredictor() {
         const res = await fetch('/api/alerts');
         if (!res.ok) throw new Error('Failed to fetch alerts');
         const data = await res.json();
-        if (mounted && Array.isArray(data.alerts) && data.alerts.length) {
+        if (mounted && Array.isArray(data.alerts) && data.alerts.length > 0) {
           setAlerts(data.alerts as CrisisAlert[]);
         }
       } catch (err) {
-        // keep existing static alerts as fallback
         console.error('Error fetching alerts:', err);
       } finally {
         if (mounted) setLoadingAlerts(false);
       }
     }
 
-    // Initial fetch + polling
+    // Initial fetch + polling every 15s
     fetchAlerts();
     const id = setInterval(fetchAlerts, 15000);
     return () => {
@@ -110,6 +61,38 @@ export default function CrisisPredictor() {
       clearInterval(id);
     };
   }, []);
+
+  const handleAddKeyword = () => {
+    if (newKeyword.trim() && !monitorKeywords.includes(newKeyword.trim())) {
+      setMonitorKeywords([...monitorKeywords, newKeyword.trim()]);
+      setNewKeyword("");
+    }
+  };
+
+  const handleRemoveKeyword = (keyword: string) => {
+    setMonitorKeywords(monitorKeywords.filter(k => k !== keyword));
+  };
+
+  const handleStartMonitor = async () => {
+    setIsStartingMonitor(true);
+    try {
+      const res = await fetch('/api/alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: monitorKeywords, interval_seconds: 300 }),
+      });
+      if (res.ok) {
+        alert('✅ Monitor started with keywords: ' + monitorKeywords.join(', '));
+        setShowMonitorSettings(false);
+      } else {
+        alert('❌ Failed to start monitor');
+      }
+    } catch (err) {
+      alert('❌ Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setIsStartingMonitor(false);
+    }
+  };
 
   const getRiskColor = (score: number) => {
     if (score >= 80) return { bg: "bg-red-600/10", border: "border-red-600", text: "text-red-500" };
@@ -171,6 +154,13 @@ export default function CrisisPredictor() {
               </button>
             </div>
           </div>
+          <button 
+            onClick={() => setShowMonitorSettings(true)}
+            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-sm hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure Monitor
+          </button>
         </div>
 
         {/* Global Risk Score */}
@@ -218,21 +208,40 @@ export default function CrisisPredictor() {
             </div>
 
             <div className="grid gap-6">
-              {alerts.map((alert, index) => {
-                const riskColors = getRiskColor(alert.riskScore);
-                return (
-                  <motion.div
-                    key={alert.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + index * 0.1 }}
-                    onClick={() => {
-                      setSelectedAlert(alert);
-                      setShowAlertDetail(true);
-                    }}
-                    className={`glass-effect p-6 rounded-lg border-2 ${riskColors.bg} ${riskColors.border} hover:bg-white/10 transition-all cursor-pointer group`}
-                  >
-                    <div className="flex items-start gap-6">
+              {alerts.length === 0 ? (
+                <div className="glass-effect p-12 rounded-lg text-center">
+                  <AlertTriangle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-light text-gray-400 mb-2">No Alerts Found</h3>
+                  <p className="text-gray-500 font-light mb-4">
+                    {monitorKeywords.length === 0 
+                      ? "Configure keywords to start monitoring for threats."
+                      : "Monitoring active. Alerts will appear here when threats are detected."}
+                  </p>
+                  {monitorKeywords.length === 0 && (
+                    <button
+                      onClick={() => setShowMonitorSettings(true)}
+                      className="px-6 py-2 bg-blue-600 text-white font-light rounded-sm hover:bg-blue-700"
+                    >
+                      Configure Monitor
+                    </button>
+                  )}
+                </div>
+              ) : (
+                alerts.map((alert, index) => {
+                  const riskColors = getRiskColor(alert.riskScore);
+                  return (
+                    <motion.div
+                      key={alert.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 + index * 0.1 }}
+                      onClick={() => {
+                        setSelectedAlert(alert);
+                        setShowAlertDetail(true);
+                      }}
+                      className={`glass-effect p-6 rounded-lg border-2 ${riskColors.bg} ${riskColors.border} hover:bg-white/10 transition-all cursor-pointer group`}
+                    >
+                      <div className="flex items-start gap-6">
                       {/* Risk Score */}
                       <div className="text-center flex-shrink-0">
                         <div className={`text-5xl font-light mb-2 ${riskColors.text}`}>
@@ -289,7 +298,8 @@ export default function CrisisPredictor() {
                     </div>
                   </motion.div>
                 );
-              })}
+                })
+              )}
             </div>
           </motion.div>
         )}
@@ -464,6 +474,107 @@ export default function CrisisPredictor() {
                   Escalate to Crisis Team
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Monitor Settings Modal */}
+        {showMonitorSettings && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="glass-effect p-8 rounded-lg max-w-2xl w-full"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-light">Configure Monitor</h2>
+                <button
+                  onClick={() => setShowMonitorSettings(false)}
+                  className="text-gray-400 hover:text-white text-2xl"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Keywords to Monitor
+                </label>
+                <p className="text-xs text-gray-500 mb-4 font-light">
+                  Enter keywords, product names, brand mentions, or issues you want to track. The system will monitor news and social media for these terms.
+                </p>
+
+                {/* Current Keywords */}
+                <div className="mb-4 p-4 bg-gray-900/50 rounded-lg">
+                  <div className="flex flex-wrap gap-2">
+                    {monitorKeywords.length === 0 ? (
+                      <p className="text-gray-500 font-light">No keywords configured yet. Add some to get started.</p>
+                    ) : (
+                      monitorKeywords.map((keyword) => (
+                        <div
+                          key={keyword}
+                          className="flex items-center gap-2 px-3 py-1 bg-blue-600 rounded-sm text-sm"
+                        >
+                          <span>{keyword}</span>
+                          <button
+                            onClick={() => handleRemoveKeyword(keyword)}
+                            type="button"
+                            className="text-white hover:text-gray-200"
+                          >
+                            <CloseIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Add New Keyword */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newKeyword}
+                    onChange={(e) => setNewKeyword(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddKeyword();
+                      }
+                    }}
+                    placeholder="Enter keyword (e.g., 'product recall', 'security breach')"
+                    className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white font-light focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleAddKeyword}
+                    type="button"
+                    className="px-4 py-2 bg-blue-600 text-white font-light rounded-sm hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Start Monitoring Button */}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowMonitorSettings(false)}
+                  className="flex-1 py-3 border border-gray-600 text-white font-light rounded-sm hover:bg-gray-900 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStartMonitor}
+                  disabled={isStartingMonitor || monitorKeywords.length === 0}
+                  className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-sm hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
+                >
+                  {isStartingMonitor ? "Starting..." : "Start Monitoring"}
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 mt-4 font-light">
+                Once started, the system will continuously monitor news feeds and social media for mentions of these keywords. Updates will appear in the alerts list in real-time.
+              </p>
             </motion.div>
           </div>
         )}
