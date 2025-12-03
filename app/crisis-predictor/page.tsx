@@ -25,16 +25,11 @@ export default function CrisisPredictor() {
   const [viewMode, setViewMode] = useState<"active" | "history">("active");
   const [showMonitorSettings, setShowMonitorSettings] = useState(false);
   const [monitorKeywords, setMonitorKeywords] = useState<string[]>(["product issue", "customer complaint", "service outage"]);
-  const [monitorClient, setMonitorClient] = useState("all");
+  const [monitorClient, setMonitorClient] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
   const [isStartingMonitor, setIsStartingMonitor] = useState(false);
-
-  const clients = [
-    { value: "all", label: "All Clients" },
-    { value: "techcorp", label: "TechCorp India" },
-    { value: "financemax", label: "FinanceMax" },
-    { value: "retailhub", label: "RetailHub" },
-  ];
+  const [savedClients, setSavedClients] = useState<string[]>([]);
+  const [newClient, setNewClient] = useState("");
 
   const globalRiskScore = 67;
 
@@ -81,10 +76,31 @@ export default function CrisisPredictor() {
     setMonitorKeywords(monitorKeywords.filter(k => k !== keyword));
   };
 
+  const handleAddClient = () => {
+    if (newClient.trim() && !savedClients.includes(newClient.trim())) {
+      const addedClient = newClient.trim();
+      setSavedClients([...savedClients, addedClient]);
+      setMonitorClient(addedClient);
+      setNewClient("");
+    }
+  };
+
+  const handleRemoveClient = (client: string) => {
+    setSavedClients(savedClients.filter(c => c !== client));
+    if (monitorClient === client) {
+      setMonitorClient("");
+    }
+  };
+
   const handleStartMonitor = async () => {
     setIsStartingMonitor(true);
     try {
-      const clientLabel = clients.find(c => c.value === monitorClient)?.label || monitorClient;
+      if (!monitorClient.trim()) {
+        alert('❌ Please select or enter a client name');
+        setIsStartingMonitor(false);
+        return;
+      }
+
       const res = await fetch('/api/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,7 +111,7 @@ export default function CrisisPredictor() {
         }),
       });
       if (res.ok) {
-        alert('✅ Monitor started for ' + clientLabel + ' with keywords: ' + monitorKeywords.join(', '));
+        alert('✅ Monitor started for ' + monitorClient + ' with keywords: ' + monitorKeywords.join(', '));
         setShowMonitorSettings(false);
       } else {
         alert('❌ Failed to start monitor');
@@ -512,22 +528,69 @@ export default function CrisisPredictor() {
               {/* Client Selection */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Select Client
+                  Client Name
                 </label>
                 <p className="text-xs text-gray-500 mb-3 font-light">
-                  Choose which client to monitor for crisis alerts.
+                  Enter the client name you want to monitor for crisis alerts.
                 </p>
-                <select
-                  value={monitorClient}
-                  onChange={(e) => setMonitorClient(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white font-light focus:border-blue-500 focus:outline-none"
-                >
-                  {clients.map((client) => (
-                    <option key={client.value} value={client.value}>
-                      {client.label}
-                    </option>
-                  ))}
-                </select>
+
+                {/* Current Clients */}
+                <div className="mb-4 p-4 bg-gray-900/50 rounded-lg">
+                  <div className="flex flex-wrap gap-2 min-h-[40px] items-center">
+                    {savedClients.length === 0 ? (
+                      <p className="text-gray-500 font-light">No clients added yet. Add one to get started.</p>
+                    ) : (
+                      savedClients.map((client) => (
+                        <div
+                          key={client}
+                          className={`flex items-center gap-2 px-3 py-1 rounded-sm text-sm cursor-pointer ${
+                            monitorClient === client
+                              ? "bg-blue-600"
+                              : "bg-gray-700 hover:bg-gray-600"
+                          }`}
+                          onClick={() => setMonitorClient(client)}
+                        >
+                          <span>{client}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveClient(client);
+                            }}
+                            type="button"
+                            className="text-white hover:text-gray-200"
+                          >
+                            <CloseIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Add New Client */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newClient}
+                    onChange={(e) => setNewClient(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddClient();
+                      }
+                    }}
+                    placeholder="Enter client name (e.g., 'Acme Corp')"
+                    className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-sm text-white font-light focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleAddClient}
+                    type="button"
+                    className="px-4 py-2 bg-blue-600 text-white font-light rounded-sm hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
               </div>
 
               <div className="mb-6">
