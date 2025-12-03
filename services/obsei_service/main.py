@@ -49,6 +49,7 @@ LOCK = threading.Lock()
 
 class MonitorConfig(BaseModel):
     keywords: List[str]
+    client: str = "AutoMonitor"
     interval_seconds: int = 300
 
 def _validate_api_key(req: Request) -> bool:
@@ -83,6 +84,7 @@ def get_alerts(request: Request, limit: int = 50):
 def start_monitor(request: Request, cfg: MonitorConfig, background_tasks: BackgroundTasks):
     print(f"🚀 [DEBUG] Start monitor requested")
     print(f"   Keywords: {cfg.keywords}")
+    print(f"   Client: {cfg.client}")
     print(f"   Interval: {cfg.interval_seconds}s")
     if not _validate_api_key(request):
         print(f"✗ [DEBUG] Unauthorized access attempt")
