@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, TrendingDown, MapPin, Clock, Twitter, MessageSquare, Shield, FileText, Send } from "lucide-react";
 
@@ -26,7 +26,7 @@ export default function CrisisPredictor() {
 
   const globalRiskScore = 67;
 
-  const alerts: CrisisAlert[] = [
+  const staticAlerts: CrisisAlert[] = [
     {
       id: 1,
       client: "TechCorp India",
@@ -77,6 +77,39 @@ export default function CrisisPredictor() {
       ],
     },
   ];
+
+  // Live alerts state (polled from Obsei service via Next.js API)
+  const [alerts, setAlerts] = useState<CrisisAlert[]>(staticAlerts);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchAlerts() {
+      setLoadingAlerts(true);
+      try {
+        const res = await fetch('/api/alerts');
+        if (!res.ok) throw new Error('Failed to fetch alerts');
+        const data = await res.json();
+        if (mounted && Array.isArray(data.alerts) && data.alerts.length) {
+          setAlerts(data.alerts as CrisisAlert[]);
+        }
+      } catch (err) {
+        // keep existing static alerts as fallback
+        console.error('Error fetching alerts:', err);
+      } finally {
+        if (mounted) setLoadingAlerts(false);
+      }
+    }
+
+    // Initial fetch + polling
+    fetchAlerts();
+    const id = setInterval(fetchAlerts, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const getRiskColor = (score: number) => {
     if (score >= 80) return { bg: "bg-red-600/10", border: "border-red-600", text: "text-red-500" };
