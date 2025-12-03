@@ -52,59 +52,92 @@ class MonitorConfig(BaseModel):
 
 def _validate_api_key(req: Request) -> bool:
     """Validate x-api-key header when OBSEI_API_KEY env var is set."""
+    print(f"🔍 [DEBUG] Validating API key...")
     if not OBSEI_API_KEY:
+        print(f"✓ [DEBUG] No API key required (OBSEI_API_KEY not set)")
         return True
     header = req.headers.get("x-api-key")
-    return header == OBSEI_API_KEY
+    is_valid = header == OBSEI_API_KEY
+    print(f"{'✓' if is_valid else '✗'} [DEBUG] API key validation: {'PASSED' if is_valid else 'FAILED'}")
+    return is_valid
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "alerts_count": len(ALERTS)}
+    print(f"🏥 [DEBUG] Health check requested")
+    result = {"status": "healthy", "alerts_count": len(ALERTS)}
+    print(f"✓ [DEBUG] Health response: {result}")
+    return result
 
 @app.get("/alerts")
 def get_alerts(request: Request, limit: int = 50):
+    print(f"📋 [DEBUG] Fetching alerts (limit={limit})")
     if not _validate_api_key(request):
+        print(f"✗ [DEBUG] Unauthorized access attempt")
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return {"alerts": list(reversed(ALERTS))[:limit]}
+    alerts_list = list(reversed(ALERTS))[:limit]
+    print(f"✓ [DEBUG] Returning {len(alerts_list)} alerts")
+    return {"alerts": alerts_list}
 
 @app.post("/start-monitor")
 def start_monitor(request: Request, cfg: MonitorConfig, background_tasks: BackgroundTasks):
+    print(f"🚀 [DEBUG] Start monitor requested")
+    print(f"   Keywords: {cfg.keywords}")
+    print(f"   Interval: {cfg.interval_seconds}s")
     if not _validate_api_key(request):
+        print(f"✗ [DEBUG] Unauthorized access attempt")
         raise HTTPException(status_code=401, detail="Unauthorized")
+    print(f"✓ [DEBUG] API key valid, starting background monitor...")
     background_tasks.add_task(_run_monitor_loop, cfg.dict())
-    return {"status": "monitor_started", "cfg": cfg}
+    result = {"status": "monitor_started", "cfg": cfg}
+    print(f"✓ [DEBUG] Background task added, returning: {result}")
+    return result
 
 def _run_monitor_loop(cfg: Dict):
     """Background monitor loop that fetches news and analyzes sentiment."""
     keywords = cfg.get("keywords", [])
+    client = cfg.get("client", "AutoMonitor")
     interval = cfg.get("interval_seconds", 300)
-    logger.info(f"Starting monitor for {keywords} every {interval}s")
+    print(f"\n{'='*60}")
+    print(f"🔄 [DEBUG] Monitor Loop Started")
+    print(f"   Keywords: {keywords}")
+    print(f"   Client: {client}")
+    print(f"   Interval: {interval}s")
+    print(f"{'='*60}\n")
     
     # Initialize sentiment analyzer if available
     analyzer = SentimentIntensityAnalyzer() if VADER_AVAILABLE else None
+    print(f"{'✓' if analyzer else '✗'} [DEBUG] Sentiment analyzer: {'AVAILABLE' if analyzer else 'NOT AVAILABLE (using fallback)'}")
     
+    cycle = 0
     while True:
+        cycle += 1
+        print(f"\n📡 [CYCLE {cycle}] Starting monitoring cycle...")
         try:
             # Fetch news from Google News RSS (no auth required)
             query = "+".join(keywords) if keywords else "breaking+news"
             rss_url = f"https://news.google.com/rss/search?q={query}"
             
-            logger.info(f"Fetching news for: {query}")
+            print(f"   📰 Fetching RSS: {rss_url}")
             
             try:
                 feed = feedparser.parse(rss_url)
+                print(f"   ✓ RSS fetched successfully")
             except Exception as e:
-                logger.error(f"Failed to fetch RSS: {e}")
+                print(f"   ✗ Failed to fetch RSS: {e}")
                 time.sleep(interval)
                 continue
             
+            entries_count = len(feed.entries)
+            print(f"   📊 Found {entries_count} entries")
+            
             if not feed.entries:
-                logger.info(f"No entries found for {query}")
+                print(f"   ℹ️  No entries found for query: {query}")
                 time.sleep(interval)
                 continue
             
             # Process entries
-            for entry in feed.entries[:10]:  # Limit to 10 per fetch
+            alerts_created = 0
+            for idx, entry in enumerate(feed.entries[:10], 1):  # Limit to 10 per fetch
                 title = entry.get("title", "")
                 summary = entry.get("summary", "")
                 published = entry.get("published", "just now")
@@ -118,12 +151,16 @@ def _run_monitor_loop(cfg: Dict):
                     try:
                         score = analyzer.polarity_scores(text)
                         sentiment = score.get("compound", 0.0)
-                    except Exception:
+                        print(f"   [{idx}/10] Title: {title[:50]}...")
+                        print(f"           Sentiment score: {sentiment:.3f}")
+                    except Exception as e:
+                        print(f"   [{idx}/10] Sentiment analysis failed: {e}")
                         sentiment = 0.0
                 else:
                     # Fallback: simple heuristic if analyzer unavailable
                     negative_words = ["crisis", "disaster", "emergency", "urgent", "critical", "issue", "problem", "fail"]
                     sentiment = -0.5 if any(w in text.lower() for w in negative_words) else 0.1
+                    print(f"   [{idx}/10] Using fallback sentiment: {sentiment:.3f}")
                 
                 # Create alert for negative sentiment
                 if sentiment < -0.3:
@@ -132,7 +169,7 @@ def _run_monitor_loop(cfg: Dict):
                         ALERT_ID += 1
                         alert = {
                             "id": ALERT_ID,
-                            "client": "AutoMonitor",
+                            "client": client,
                             "riskScore": int(min(max(abs(sentiment) * 100, 0), 100)),
                             "region": "Global",
                             "language": "en",
@@ -145,11 +182,18 @@ def _run_monitor_loop(cfg: Dict):
                             "link": link,
                         }
                         ALERTS.append(alert)
-                        logger.info(f"New alert: {title[:80]}")
+                        alerts_created += 1
+                        print(f"           🚨 ALERT CREATED (ID: {ALERT_ID}, Risk: {alert['riskScore']}/100)")
+                else:
+                    print(f"           ✓ No alert (sentiment {sentiment:.3f} >= -0.3 threshold)")
             
+            print(f"   📈 Cycle {cycle} complete: {alerts_created} alerts created, {len(ALERTS)} total alerts stored")
+            print(f"   ⏰ Waiting {interval}s until next cycle...\n")
             time.sleep(interval)
         except Exception as e:
-            logger.exception(f"Monitor error: {e}")
+            print(f"   ✗ Monitor error: {e}")
+            import traceback
+            traceback.print_exc()
             time.sleep(interval)
 
 if __name__ == "__main__":
