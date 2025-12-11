@@ -13,7 +13,6 @@ export async function GET() {
       console.error('Obsei service returned error:', res.status, text);
       return NextResponse.json({ alerts: [], error: 'Bad gateway' }, { status: 502 });
     }
-
     const data = await res.json();
     return NextResponse.json(data);
   } catch (err: any) {
